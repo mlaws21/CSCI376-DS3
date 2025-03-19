@@ -13,54 +13,51 @@ mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
 # Path to the gesture recognition model
-model_path = "gesture_recognizer.task"  # Update this to the correct path where the model is saved, if not in current directory
+model_path = "gesture_recognizer.task"
 
 # Initialize the Gesture Recognizer
 options = GestureRecognizerOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     num_hands=1
 )
+
 gesture_recognizer = GestureRecognizer.create_from_options(options)
 
-
-def is_thumb_left(hand_landmarks):
+def is_thumb_left(hand_landmarks, offset=0.05):
     
     thumb_tip = 4  
     thumb_base = 2
+    pinky_base = 17
 
-    # print(hand_landmarks.landmark[thumb_tip].x + 0.05, hand_landmarks.landmark[thumb_base].x)
-    return hand_landmarks.landmark[thumb_tip].x + 0.05 < hand_landmarks.landmark[thumb_base].x
+    return hand_landmarks.landmark[thumb_tip].x + offset < hand_landmarks.landmark[thumb_base].x and hand_landmarks.landmark[thumb_base].x < hand_landmarks.landmark[pinky_base].x
 
-def is_thumb_right(hand_landmarks):
+def is_thumb_right(hand_landmarks, offset=0.05):
     
     thumb_tip = 4  
     thumb_base = 2
+    pinky_base = 17
 
-    return hand_landmarks.landmark[thumb_tip].x - 0.05 > hand_landmarks.landmark[thumb_base].x
+    return hand_landmarks.landmark[thumb_tip].x - offset > hand_landmarks.landmark[thumb_base].x and hand_landmarks.landmark[thumb_base].x > hand_landmarks.landmark[pinky_base].x
 
-def count_fingers(hand_landmarks):
+def count_fingers(hand_landmarks, offset=0.1):
     finger_tips = [8, 12, 16, 20]  # Index, Middle, Ring, Pinky
     finger_bases = [5, 9, 13, 17]  # knuckles
-    # fingers_up = []
     fingers_up = 0
 
-
-    # Other fingers
     for tip, base in zip(finger_tips, finger_bases):
-        if hand_landmarks.landmark[tip].y + 0.1 < hand_landmarks.landmark[base].y:
-            # fingers_up.append(tip)
-            # print(hand_landmarks.landmark[tip].y,  hand_landmarks.landmark[base].y)
+        if hand_landmarks.landmark[tip].y + offset < hand_landmarks.landmark[base].y:
             fingers_up += 1
 
     return fingers_up  
 
 def main():
     # Initialize video capture
-    # FIXME: 0 gets phone 1 gets webcam
-    # TODO: MAKE SURE TO DO NO GESTURE BEFORE WE START RECORDING A NEW ONE
+    # NOTE: 0 gets phone 1 gets webcam
     cap = cv2.VideoCapture(1)  # 0 is the default webcam
 
+    # Flag to make sure screen is clear before recording gestures
     can_record = True
+    
     with mp_hands.Hands(
         static_image_mode=False,
         max_num_hands=2,
@@ -85,13 +82,13 @@ def main():
 
             # Process hand landmarks for custom gestures
             results = hands.process(image_rgb)
-            # custom_gesture_detected = False
+
+            # set default results of gesture detection
             fingers_up = 0
             thumb_left = False
             thumb_right = False
 
             
-
             if results.multi_hand_landmarks:
                 
                 for hand_landmarks in results.multi_hand_landmarks:
@@ -99,7 +96,7 @@ def main():
                     fingers_up = count_fingers(hand_landmarks)
                     thumb_left = is_thumb_left(hand_landmarks)
                     thumb_right = is_thumb_right(hand_landmarks)
-                    # custom_gesture_detected = fingers_up > 0
+
             else:
                 can_record = True
             
@@ -129,12 +126,8 @@ def main():
                         
                         pyautogui.press("n")
                         # NOTE: force user to click enter as a design principal thing
-                        
-                    # elif recognized_gesture == "Closed_Fist" and confidence > 0.6:
-                    #     gesture_text = f"{recognized_gesture} ({confidence:.2f})"
-                        
-                        # print("d")
-                        # pyautogui.press("d")
+
+                    # Custom gestures for controlling the board
                     elif thumb_left:
                             gesture_text = f"thumb left"
                             pyautogui.press("a")
@@ -144,21 +137,20 @@ def main():
                             pyautogui.press("d")
                             
                             
-                        
-                    elif recognized_gesture not in ["Thumb_Up", "Thumb_Down", "Open_Palm"] and fingers_up > 0:
+                    # If we dont see a gesture to control the board then we should look for how many fingers are up
+                    elif fingers_up > 0:
 
                             pyautogui.press(f"{fingers_up}")
                             gesture_text = f"{fingers_up} Fingers Up"
-                            # print(f"Detected: {fingers_up} fingers up")
                     
                     else:
                         can_record = prev_can_record
                         
-
-
                 else:
+                    # lets user know nothing is being detected
                     gesture_text = "No Gesture Detected"
             else:
+                # lets user know to clear the screen
                 gesture_text = "Clear Screen before proceeding"
 
             # Display gesture recognition results
